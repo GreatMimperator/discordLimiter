@@ -1,0 +1,14 @@
+[Unit]
+Description=Limits number of messages send by yourself
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+User=root
+WorkingDirectory=/home/root/discordLimiter
+StandardOutput=append:/var/log/discord-self-limiter.log
+StandardError=append:/var/log/discord-self-limiter.log
+
+[Install]
+WantedBy=multi-user.target
