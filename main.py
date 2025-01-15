@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from string import Template
 
@@ -17,6 +18,8 @@ MESSAGE_DELETE_INTERVAL_SIZE = int(config['limits']['message_delete_interval_siz
 MESSAGE_ALARM_INTERVAL_SIZE = int(config['limits']['message_alarm_interval_size'])
 MESSAGE_INTERVAL_SIZE_DAYS = int(config['limits']['message_interval_size_days'])
 
+STATUS_MESSAGE_LIFETIME_SECONDS = int(config['timing']['status_message_lifetime_seconds'])
+
 alarm_text_template = (
     Template(
         f"Внимание! "
@@ -24,6 +27,10 @@ alarm_text_template = (
         f"Если количество сообщений достигнет {MESSAGE_DELETE_INTERVAL_SIZE}, они будут удалены."
     )
 )
+status_message_lifetime_template = (
+    Template(f"У вас осталось $messages_left_count сообщений (интервал - {MESSAGE_INTERVAL_SIZE_DAYS} дней)")
+)
+NO_MESSAGES_LEFT_MESSAGE = f"У вас не осталось больше сообщений (интервал - {MESSAGE_INTERVAL_SIZE_DAYS} дней)"
 limit_replacer_text = f"[Лимит сообщений превышен! (Максимум {MESSAGE_DELETE_INTERVAL_SIZE} сообщений)]"
 
 client = discord.Client()
@@ -55,7 +62,25 @@ async def on_message(message):
     # Обрезаем список от этого индекса
     message_write_time_list = message_write_time_list[oldest_message_in_interval_index:]
 
+    message_count_before_the_message = len(message_write_time_list) - 1
+
+    if message.content in ["статус", "status"]:
+        if message_count_before_the_message < MESSAGE_DELETE_INTERVAL_SIZE:
+            await message.edit(
+                status_message_lifetime_template.substitute(
+                    messages_left_count=MESSAGE_DELETE_INTERVAL_SIZE - message_count_before_the_message
+                )
+            )
+        else:
+            await message.edit(NO_MESSAGES_LEFT_MESSAGE)
+        await asyncio.sleep(STATUS_MESSAGE_LIFETIME_SECONDS)
+        message_write_time_list = message_write_time_list[:-1]
+        await message.delete()
+        return
+
+
     if len(message_write_time_list) > MESSAGE_DELETE_INTERVAL_SIZE:
+        message_write_time_list = message_write_time_list[:-1]
         await message.edit(content=limit_replacer_text)
         return
     if len(message_write_time_list) % MESSAGE_ALARM_INTERVAL_SIZE == 0:
